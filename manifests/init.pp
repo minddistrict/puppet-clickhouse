@@ -1,7 +1,7 @@
 # @summary module to install and configure clickhouse server
 #
 # @param password_sha256 default SHA256 password hash to use
-# @param package clieckhouse server package to install
+# @param package clickhouse server package to install
 # @param owner owner to use for file permissions
 # @param group group to use for file permissions
 # @param conf_dir main config directory
@@ -85,26 +85,46 @@ class clickhouse (
   Integer[0]                                  $default_result_rows,
   Integer[0]                                  $default_read_rows,
   Integer[0]                                  $default_execution_time,
+  Integer[0]                                  $listen_reuse_port,
   Optional[Hash[String[1], Clickhouse::User]] $users,
 ) {
-  ensure_packages([$package])
+  apt::source { 'clickhouse':
+    comment  => 'Clickhouse repo',
+    location => 'https://repo.yandex.ru/clickhouse/deb/stable/',
+    release  => '',
+    repos    => 'main/',
+    key      => {
+      'id'     => '9EBB357BC2B0876A774500C7C8F1E19FE0C56BD4',
+      'server' => 'keyserver.ubuntu.com',
+    },
+    include  => {
+      'deb' => true,
+    },
+  }
+  package {$package:
+    ensure => 'present',
+    require => Apt::Source['clickhouse'],
+  }
   if $dictionaries_config_source {
     file {$conf_dir:
       ensure  => directory,
       source  => $dictionaries_config_source,
       recurse => remote,
       notify  => Service[$service],
+      require => Package[$package],
     }
   }
   file {"${conf_dir}/users.xml":
     ensure  => file,
     content => template('clickhouse/etc/users.xml.erb'),
     notify  => Service[$service],
+    require => Package[$package],
   }
   file {"${conf_dir}/config.xml":
     ensure  => file,
     content => template('clickhouse/etc/config.xml.erb'),
     notify  => Service[$service],
+    require => Package[$package],
   }
   service {$service:
     ensure => running,
